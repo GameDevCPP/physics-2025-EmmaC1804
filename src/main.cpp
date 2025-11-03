@@ -2,8 +2,8 @@
 // Created by Emma Clarke on 03/11/2025.
 //
 
-#include <dispatch/data.h>
-
+#include <dispatch/dispatch.h>
+#include <SFML/Graphics.hpp>
 #include "Box2D/Collision/Shapes/b2PolygonShape.h"
 #include "Box2D/Dynamics/b2Body.h"
 #include "Box2D/Dynamics/b2Fixture.h"
@@ -75,6 +75,40 @@ void init() {
     //Construct a world, which holds and simulates the physics bodies
     world = new b2World(gravity);
 
+    //Wall Dimensions
+    Vector2f walls[] = {
+        //Top
+        Vector2f(gameWidth * .5f, 5.f), Vector2f(gameWidth, 10.f),
+        //Bottom
+        Vector2f(gameWidth * .5f, gameHeight - 5.f), Vector2f(gameWidth, 10.f),
+        //Left
+        Vector2f(5.f, gameHeight * .5f), Vector2f(10.f, gameHeight),
+        //Right
+        Vector2f(gameWidth - 5.f, gameHeight * .5f), Vector2f(10.f, gameHeight),
+    };
+
+    //Setting box colours
+    const Color box_cols[]{      {255,0,0},
+                                 {0,255,0},
+                                 {0,0,255},
+                                 {175,0,255},
+                                 {255,255,0}};
+
+
+    //Build walls
+    for (int i = 0; i < 7; i+=2) {
+        //Create SFML shapes for each wall
+        auto w = new RectangleShape();
+        w->setPosition(walls[i]);
+        w->setSize(walls[i + 1]);
+        w->setOrigin(walls[i + 1] * .5f);
+        w->setFillColor(Color::White);
+        sprites.push_back(w);
+
+        //Create static physics body for the wall
+        auto p = CreatePhysicsBox(*world, false, *w);
+        bodies.push_back(p);
+    }
     //Create Boxes
     for (int i = 1; i < 11; ++i) {
         //Create SFML shapes for each box
@@ -82,7 +116,7 @@ void init() {
         s->setPosition(Vector2f(i * (gameWidth / 12.f), gameHeight * .7f));
         s->setSize(Vector2f(50.0f, 50.0f));
         s->setOrigin(Vector2f(25.0f, 25.0f));
-        s->setFillColor(sf::Color::White);
+        s->setFillColor(box_cols[i % 5]);
         sprites.push_back(s);
 
         //Create a dynamic physics body for the box
@@ -92,3 +126,45 @@ void init() {
         bodies.push_back(b);
     }
 }
+
+void Update() {
+    static Clock clock;
+    float dt = clock.restart().asSeconds();
+
+    //Step Physics world by dt (non-fixed timestep) - THIS DOES ALL THE ACTUAL SIMULATION, DON'
+    world -> Step(dt, velocityIterations, positionIterations);
+
+    for (int i = 0; i < bodies.size(); ++i) {
+        //Sync Sprites to physics position
+        sprites[i]->setPosition(invert_height(bv2_to_sv2(bodies[i]->GetPosition())));
+        //Sync Sprites to physics Rotation
+        sprites[i]->setRotation((180 / b2_pi) * bodies[i]->GetAngle());
+    }
+}
+
+void Render(RenderWindow &window) {
+    for (auto s : sprites) {
+        window.draw(*s);
+    }
+}
+
+int main() {
+    RenderWindow window(VideoMode(gameWidth, gameHeight), "Physics");
+    init();
+
+    while (window.isOpen()) {
+        Event event;
+        while (window.pollEvent(event)) {
+            if (event.type == Event::Closed)
+                window.close();
+        }
+
+        window.clear();
+        Update();
+        Render(window);
+        window.display();
+    }
+
+    return 0;
+}
+
